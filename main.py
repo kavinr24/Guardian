@@ -1,6 +1,20 @@
+import threading
 import cv2
 import keyboard
+from alerts.alerts import *
 from vision.detector import CONNECTIONS, SafetyDetector
+
+alert_lock = threading.Lock()
+
+
+def run_alert(alert_type):
+    with alert_lock:
+        play_audio_file(wait=True)
+        if alert_type == "microsleep":
+            speak_microsleep_warning()
+        else:
+            speak_yawn_warning()
+
 
 def main():
     detector = SafetyDetector()
@@ -11,6 +25,9 @@ def main():
         detector.close()
         raise SystemExit
 
+    previous_eye_status = None
+    previous_yawn_status = None
+
     try:
         while True:
             ret, frame = cap.read()
@@ -19,6 +36,14 @@ def main():
                 break
 
             detection = detector.process(frame)
+
+            if detection.eye_status == "Drowsy" and previous_eye_status != "Drowsy":
+                threading.Thread(target=run_alert,args=("microsleep",),daemon=True,).start()
+            if (detection.yawn_status == "Yawn warning" and previous_yawn_status != "Yawn warning"):
+                threading.Thread(target=run_alert,args=("yawn",),daemon=True,).start()
+
+            previous_eye_status = detection.eye_status
+            previous_yawn_status = detection.yawn_status
 
             for connection in CONNECTIONS:
                 if detection.points:
