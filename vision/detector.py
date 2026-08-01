@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
 import cv2
@@ -30,7 +31,7 @@ class SafetyDetector:
         mouth_threshold=0.60,
         frames_until_yawn=30,
     ):
-        model_path = "C:\\Users\\kavinr\\Desktop\\Guardian\\vision\\face_landmarker.task"
+        model_path = Path(__file__).resolve().parent / "face_landmarker.task"
         options = vision.FaceLandmarkerOptions(
             base_options=python.BaseOptions(model_asset_path=str(model_path)),
             num_faces=1,
