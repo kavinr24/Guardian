@@ -41,6 +41,9 @@ if cap is None:
     landmarker.close()
     raise SystemExit
 
+closed_frames = 0
+frames_until_drowsy = 45
+
 while True:
     ret, frame = cap.read()
     if not ret:
@@ -52,6 +55,9 @@ while True:
     result = landmarker.detect(image)
 
     height, width = frame.shape[:2]
+    if not result.face_landmarks:
+        closed_frames = 0
+
     for face in result.face_landmarks:
         points = []
         for landmark in face:
@@ -62,9 +68,14 @@ while True:
         eye_ratio_average = (right_ratio + left_ratio) / 2
 
         if eye_ratio_average <= closed_threshold:
-            eye_status = "Eyes closed"
+            closed_frames += 1
+            if closed_frames >= frames_until_drowsy:
+                eye_status = "Drowsy"
+            else:
+                eye_status = "Eyes closed"
             status_color = (0, 0, 255)
         else:
+            closed_frames = 0
             eye_status = "Eyes open"
             status_color = (0, 255, 0)
         print(eye_status, eye_ratio_average)
