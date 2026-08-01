@@ -22,6 +22,11 @@ def eye_ratio(points):
     width = 2 * distance(left, right)
     return height / width
 
+def mouth_ratio(points):
+    opening = distance(points[13], points[14])
+    width = distance(points[78], points[308])
+    return opening / width
+
 
 right_eye = [33, 160, 158, 133, 153, 144]
 left_eye = [362, 385, 387, 263, 373, 380]
@@ -43,6 +48,9 @@ if cap is None:
 
 closed_frames = 0
 frames_until_drowsy = 45
+yawn_frames = 0
+mouth_threshold = 0.60
+frames_until_yawn = 30
 
 while True:
     ret, frame = cap.read()
@@ -55,8 +63,13 @@ while True:
     result = landmarker.detect(image)
 
     height, width = frame.shape[:2]
+    eye_status = "No face"
+    status_color = (255, 255, 255)
+    yawn_status = "No yawn"
+    yawn_color = (0, 255, 0)
     if not result.face_landmarks:
         closed_frames = 0
+        yawn_frames = 0
 
     for face in result.face_landmarks:
         points = []
@@ -78,7 +91,18 @@ while True:
             closed_frames = 0
             eye_status = "Eyes open"
             status_color = (0, 255, 0)
-        print(eye_status, eye_ratio_average)
+        mar = mouth_ratio(points)
+        if mar > mouth_threshold:
+            yawn_frames += 1
+            if yawn_frames >= frames_until_yawn:
+                yawn_status = "Yawn warning"
+                yawn_color = (0, 0, 255)
+        else:
+            yawn_frames = 0
+            yawn_status = "No yawn"
+            yawn_color = (0, 255, 0)
+
+        print(eye_status, eye_ratio_average, yawn_status, mar)
 
         for connection in connections:
             cv2.line(
@@ -88,7 +112,8 @@ while True:
                 (0, 255, 0),
                 1,
             )
-
+    cv2.putText(frame, eye_status, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, status_color, 2)
+    cv2.putText(frame, yawn_status, (20, 80), cv2.FONT_HERSHEY_SIMPLEX, 1, yawn_color, 2)
     cv2.imshow("face mesh", frame)
     cv2.waitKey(1)
     if keyboard.is_pressed("q"):
