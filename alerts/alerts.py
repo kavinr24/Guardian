@@ -6,6 +6,7 @@ import urllib.request
 from pathlib import Path
 
 import pyttsx3
+from dotenv import load_dotenv
 
 if os.name == "nt":
     import winsound
@@ -15,11 +16,17 @@ YAWN_WARNING_MESSAGE = "Yawning detected. Please stay alert."
 MICROSLEEP_WARNING_MESSAGE = "Sleeping detected. Please pull over."
 DISTRACTION_WARNING_MESSAGE = "Please keep your eyes on the road."
 ALERT_AUDIO_FILE = Path(__file__).resolve().parent / "alert.wav"
-DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1533292631373774888/4uOtNAr4Z8f_xWEip7tU7rEFl7lOz-gFBKEHKp7kRGfhEeJeJ8rf8GrE_LN0JXoKSXOL"
+ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(dotenv_path=ENV_FILE)
+DISCORD_WEBHOOK_URL = os.getenv("DC_WEBHOOK", "")
 DISCORD_SLEEP_MESSAGE = "@everyone GUARDIAN USER IS SLEEPING WHILE DRIVING, PLEASE LOCATE AND HELP THE DRIVER."
 
 
 def send_discord_webhook():
+    if not DISCORD_WEBHOOK_URL:
+        print("no webhook url found in env")
+        return
+
     def post_webhook():
         payload = json.dumps({"content": DISCORD_SLEEP_MESSAGE}).encode("utf-8")
         request = urllib.request.Request(
