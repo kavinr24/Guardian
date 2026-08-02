@@ -1,5 +1,8 @@
+import json
 import os
 import subprocess
+import threading
+import urllib.request
 from pathlib import Path
 
 import pyttsx3
@@ -12,6 +15,29 @@ YAWN_WARNING_MESSAGE = "Yawning detected. Please stay alert."
 MICROSLEEP_WARNING_MESSAGE = "Sleeping detected. Please pull over."
 DISTRACTION_WARNING_MESSAGE = "Please keep your eyes on the road."
 ALERT_AUDIO_FILE = Path(__file__).resolve().parent / "alert.wav"
+DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1533292631373774888/4uOtNAr4Z8f_xWEip7tU7rEFl7lOz-gFBKEHKp7kRGfhEeJeJ8rf8GrE_LN0JXoKSXOL"
+DISCORD_SLEEP_MESSAGE = "@everyone GUARDIAN USER IS SLEEPING WHILE DRIVING, PLEASE LOCATE AND HELP THE DRIVER."
+
+
+def send_discord_webhook():
+    def post_webhook():
+        payload = json.dumps({"content": DISCORD_SLEEP_MESSAGE}).encode("utf-8")
+        request = urllib.request.Request(
+            DISCORD_WEBHOOK_URL,
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "Guardian/1.0",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=5) as response:
+                print(f"webhook sent: HTTP {response.status}")
+        except Exception as error:
+            print(f"webhook failed {error}")
+
+    threading.Thread(target=post_webhook, daemon=True).start()
 
 
 def speak_message(message, rate=175, volume=1.0):

@@ -27,6 +27,7 @@ class SafetyResult:
     distraction_color: tuple
     pitch: Optional[float]
     yaw: Optional[float]
+    sleep_emergency_alert: bool
 
 
 class SafetyDetector:
@@ -38,6 +39,9 @@ class SafetyDetector:
         yawn_duration_seconds=1.0,
         pose_threshold=20,
         distraction_duration_seconds=1.5,
+        eye_open_grace_seconds=0.25,
+        awake_reset_seconds=3.0,
+        emergency_sleep_duration_seconds=10.0,
     ):
         model_path = Path(__file__).resolve().parent / "face_landmarker.task"
         options = vision.FaceLandmarkerOptions(
@@ -54,6 +58,11 @@ class SafetyDetector:
         self.distraction_start_time = None
         self.pose_threshold = pose_threshold
         self.distraction_duration_seconds = distraction_duration_seconds
+        self.eye_open_grace_seconds = eye_open_grace_seconds
+        self.awake_reset_seconds = awake_reset_seconds
+        self.emergency_sleep_duration_seconds = emergency_sleep_duration_seconds
+        self.eye_open_start_time = None
+        self.sleep_emergency_sent = False
 
     def process(self, frame):
         height, width = frame.shape[:2]
@@ -65,6 +74,7 @@ class SafetyDetector:
             self.closed_start_time = None
             self.yawn_start_time = None
             self.distraction_start_time = None
+            self.eye_open_start_time = None
             return SafetyResult(
                 eye_status="No face",
                 yawn_status="No yawn",
@@ -77,6 +87,7 @@ class SafetyDetector:
                 distraction_color=(255, 255, 255),
                 pitch=None,
                 yaw=None,
+                sleep_emergency_alert=False,
             )
 
         face = result.face_landmarks[0]
@@ -91,7 +102,9 @@ class SafetyDetector:
 
         current_time = time.time()
 
+        sleep_emergency_alert = False
         if average_ear <= self.closed_threshold:
+            self.eye_open_start_time = None
             if self.closed_start_time is None:
                 self.closed_start_time = current_time
             closed_duration = current_time - self.closed_start_time
@@ -101,10 +114,40 @@ class SafetyDetector:
                 else "Eyes closed"
             )
             status_color = (0, 0, 255)
+            if (
+                closed_duration >= self.emergency_sleep_duration_seconds
+                and not self.sleep_emergency_sent
+            ):
+                sleep_emergency_alert = True
+                self.sleep_emergency_sent = True
         else:
-            self.closed_start_time = None
-            eye_status = "Eyes open"
-            status_color = (0, 255, 0)
+            if self.eye_open_start_time is None:
+                self.eye_open_start_time = current_time
+            awake_duration = current_time - self.eye_open_start_time
+            brief_open = (
+                self.closed_start_time is not None
+                and awake_duration < self.eye_open_grace_seconds
+            )
+            if brief_open:
+                closed_duration = current_time - self.closed_start_time
+                eye_status = (
+                    "Drowsy"
+                    if closed_duration >= self.drowsy_duration_seconds
+                    else "Eyes closed"
+                )
+                status_color = (0, 0, 255)
+                if (
+                    closed_duration >= self.emergency_sleep_duration_seconds
+                    and not self.sleep_emergency_sent
+                ):
+                    sleep_emergency_alert = True
+                    self.sleep_emergency_sent = True
+            else:
+                self.closed_start_time = None
+                eye_status = "Eyes open"
+                status_color = (0, 255, 0)
+                if awake_duration >= self.awake_reset_seconds:
+                    self.sleep_emergency_sent = False
 
         pose = calculate_head_pose(points, width, height)
         pitch = pose[0] if pose is not None else None
@@ -152,6 +195,7 @@ class SafetyDetector:
             distraction_color=distraction_color,
             pitch=pitch,
             yaw=yaw,
+            sleep_emergency_alert=sleep_emergency_alert,
         )
 
     def close(self):

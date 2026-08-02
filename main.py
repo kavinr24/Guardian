@@ -42,6 +42,10 @@ def main():
 
             detection = detector.process(frame)
 
+            if detection.sleep_emergency_alert:
+                print("sending discord alert")
+                send_discord_webhook()
+
             if detection.eye_status == "Drowsy" and previous_eye_status != "Drowsy":
                 threading.Thread(target=run_alert,args=("microsleep",),daemon=True,).start()
             if (detection.yawn_status == "Yawn warning"and previous_yawn_status != "Yawn warning"):
