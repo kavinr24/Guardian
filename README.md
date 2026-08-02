@@ -1,3 +1,5 @@
+I was only able to spend 1 day working on this which is why all commits are on Aug 1.
+
 # Guardian
 Real-time driver safety monitoring powered by computer vision.
 
