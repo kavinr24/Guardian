@@ -1,3 +1,5 @@
+import os
+import sys
 import threading
 
 import cv2
@@ -21,8 +23,15 @@ def run_alert(alert_type):
 
 
 def main():
+    has_display = sys.platform == "win32" or bool(
+        os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")
+    )
+    if not has_display:
+        print("no graphical display found; running headless, press Ctrl+C to stop")
+
     detector = SafetyDetector()
-    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    backend = cv2.CAP_DSHOW if sys.platform == "win32" else cv2.CAP_V4L2
+    cap = cv2.VideoCapture(0, backend)
 
     if not cap.isOpened():
         print("couldn't open camera")
@@ -76,15 +85,15 @@ def main():
                     detection.yaw,
                 )
 
-            cv2.imshow("face mesh", frame)
-            cv2.waitKey(1)
-
-            if keyboard.is_pressed("q"):
-                break
+            if has_display:
+                cv2.imshow("face mesh", frame)
+                if cv2.waitKey(1) & 0xFF == ord("q"):
+                    break
     finally:
         cap.release()
         detector.close()
-        cv2.destroyAllWindows()
+        if has_display:
+            cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":

@@ -48,12 +48,15 @@ def send_discord_webhook():
 
 
 def speak_message(message, rate=175, volume=1.0):
-    engine = pyttsx3.init()
-    engine.setProperty("rate", rate)
-    engine.setProperty("volume", volume)
-    engine.say(message)
-    engine.runAndWait()
-    engine.stop()
+    try:
+        engine = pyttsx3.init()
+        engine.setProperty("rate", rate)
+        engine.setProperty("volume", volume)
+        engine.say(message)
+        engine.runAndWait()
+        engine.stop()
+    except Exception as error:
+        print(f"TTS unavailable: {error}")
 
 
 def speak_yawn_warning():
