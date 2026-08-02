@@ -6,6 +6,7 @@ import winsound
 
 YAWN_WARNING_MESSAGE = "Yawning detected. Please stay alert."
 MICROSLEEP_WARNING_MESSAGE = "Sleeping detected. Please pull over."
+DISTRACTION_WARNING_MESSAGE = "Please keep your eyes on the road."
 ALERT_AUDIO_FILE = Path(__file__).resolve().parent / "alert.wav"
 
 
@@ -24,6 +25,10 @@ def speak_yawn_warning():
 
 def speak_microsleep_warning():
     speak_message(MICROSLEEP_WARNING_MESSAGE)
+
+
+def speak_distraction_warning():
+    speak_message(DISTRACTION_WARNING_MESSAGE)
 
 
 def play_audio_file(wait=False):

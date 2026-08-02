@@ -1,6 +1,8 @@
 import threading
+
 import cv2
 import keyboard
+
 from alerts.alerts import *
 from vision.detector import CONNECTIONS, SafetyDetector
 
@@ -12,6 +14,8 @@ def run_alert(alert_type):
         play_audio_file(wait=True)
         if alert_type == "microsleep":
             speak_microsleep_warning()
+        elif alert_type == "distraction":
+            speak_distraction_warning()
         else:
             speak_yawn_warning()
 
@@ -27,6 +31,7 @@ def main():
 
     previous_eye_status = None
     previous_yawn_status = None
+    previous_distraction_status = None
 
     try:
         while True:
@@ -39,11 +44,14 @@ def main():
 
             if detection.eye_status == "Drowsy" and previous_eye_status != "Drowsy":
                 threading.Thread(target=run_alert,args=("microsleep",),daemon=True,).start()
-            if (detection.yawn_status == "Yawn warning" and previous_yawn_status != "Yawn warning"):
+            if (detection.yawn_status == "Yawn warning"and previous_yawn_status != "Yawn warning"):
                 threading.Thread(target=run_alert,args=("yawn",),daemon=True,).start()
+            if (detection.distraction_status == "Distraction warning"and previous_distraction_status != "Distraction warning"):
+                threading.Thread(target=run_alert,args=("distraction",),daemon=True,).start()
 
             previous_eye_status = detection.eye_status
             previous_yawn_status = detection.yawn_status
+            previous_distraction_status = detection.distraction_status
 
             for connection in CONNECTIONS:
                 if detection.points:
@@ -51,9 +59,18 @@ def main():
 
             cv2.putText(frame,detection.eye_status,(20, 40),cv2.FONT_HERSHEY_SIMPLEX,1,detection.status_color,2,)
             cv2.putText(frame,detection.yawn_status,(20, 80),cv2.FONT_HERSHEY_SIMPLEX,1,detection.yawn_color,2,)
+            cv2.putText(frame,detection.distraction_status,(20, 120),cv2.FONT_HERSHEY_SIMPLEX,0.8,detection.distraction_color,2,)
 
             if detection.eye_ratio is not None:
-                print(detection.eye_status, detection.eye_ratio, detection.yawn_status, detection.mouth_ratio)
+                print(
+                    detection.eye_status,
+                    detection.eye_ratio,
+                    detection.yawn_status,
+                    detection.mouth_ratio,
+                    detection.distraction_status,
+                    detection.pitch,
+                    detection.yaw,
+                )
 
             cv2.imshow("face mesh", frame)
             cv2.waitKey(1)

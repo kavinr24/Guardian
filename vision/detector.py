@@ -9,6 +9,7 @@ from mediapipe.tasks.python import vision
 
 from .ear import LEFT_EYE, RIGHT_EYE, calculate_ear
 from .mar import calculate_mar
+from .pose import calculate_head_pose, is_looking_away
 
 CONNECTIONS = vision.FaceLandmarksConnections.FACE_LANDMARKS_TESSELATION
 
@@ -21,6 +22,10 @@ class SafetyResult:
     points: list
     status_color: tuple
     yawn_color: tuple
+    distraction_status: str
+    distraction_color: tuple
+    pitch: Optional[float]
+    yaw: Optional[float]
 
 
 class SafetyDetector:
@@ -30,6 +35,8 @@ class SafetyDetector:
         frames_until_drowsy=45,
         mouth_threshold=0.60,
         frames_until_yawn=30,
+        pose_threshold=20,
+        frames_until_distraction=45,
     ):
         model_path = Path(__file__).resolve().parent / "face_landmarker.task"
         options = vision.FaceLandmarkerOptions(
@@ -43,6 +50,9 @@ class SafetyDetector:
         self.frames_until_yawn = frames_until_yawn
         self.closed_frames = 0
         self.yawn_frames = 0
+        self.distraction_frames = 0
+        self.pose_threshold = pose_threshold
+        self.frames_until_distraction = frames_until_distraction
 
     def process(self, frame):
         height, width = frame.shape[:2]
@@ -53,6 +63,7 @@ class SafetyDetector:
         if not result.face_landmarks:
             self.closed_frames = 0
             self.yawn_frames = 0
+            self.distraction_frames = 0
             return SafetyResult(
                 eye_status="No face",
                 yawn_status="No yawn",
@@ -61,6 +72,10 @@ class SafetyDetector:
                 points=[],
                 status_color=(255, 255, 255),
                 yawn_color=(0, 255, 0),
+                distraction_status="No face",
+                distraction_color=(255, 255, 255),
+                pitch=None,
+                yaw=None,
             )
 
         face = result.face_landmarks[0]
@@ -86,6 +101,22 @@ class SafetyDetector:
             eye_status = "Eyes open"
             status_color = (0, 255, 0)
 
+        pose = calculate_head_pose(points, width, height)
+        pitch = pose[0] if pose is not None else None
+        yaw = pose[1] if pose is not None else None
+        if is_looking_away(pose, self.pose_threshold):
+            self.distraction_frames += 1
+            if self.distraction_frames >= self.frames_until_distraction:
+                distraction_status = "Distraction warning"
+                distraction_color = (0, 0, 255)
+            else:
+                distraction_status = "Checking pose"
+                distraction_color = (0, 255, 255)
+        else:
+            self.distraction_frames = 0
+            distraction_status = "Pose normal"
+            distraction_color = (0, 255, 0)
+
         current_mar = calculate_mar(points)
         if current_mar > self.mouth_threshold:
             self.yawn_frames += 1
@@ -108,6 +139,10 @@ class SafetyDetector:
             points=points,
             status_color=status_color,
             yawn_color=yawn_color,
+            distraction_status=distraction_status,
+            distraction_color=distraction_color,
+            pitch=pitch,
+            yaw=yaw,
         )
 
     def close(self):
