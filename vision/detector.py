@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -32,11 +33,11 @@ class SafetyDetector:
     def __init__(
         self,
         closed_threshold=0.20,
-        frames_until_drowsy=45,
+        drowsy_duration_seconds=1.5,
         mouth_threshold=0.60,
-        frames_until_yawn=30,
+        yawn_duration_seconds=1.0,
         pose_threshold=20,
-        frames_until_distraction=45,
+        distraction_duration_seconds=1.5,
     ):
         model_path = Path(__file__).resolve().parent / "face_landmarker.task"
         options = vision.FaceLandmarkerOptions(
@@ -45,14 +46,14 @@ class SafetyDetector:
         )
         self.landmarker = vision.FaceLandmarker.create_from_options(options)
         self.closed_threshold = closed_threshold
-        self.frames_until_drowsy = frames_until_drowsy
+        self.drowsy_duration_seconds = drowsy_duration_seconds
         self.mouth_threshold = mouth_threshold
-        self.frames_until_yawn = frames_until_yawn
-        self.closed_frames = 0
-        self.yawn_frames = 0
-        self.distraction_frames = 0
+        self.yawn_duration_seconds = yawn_duration_seconds
+        self.closed_start_time = None
+        self.yawn_start_time = None
+        self.distraction_start_time = None
         self.pose_threshold = pose_threshold
-        self.frames_until_distraction = frames_until_distraction
+        self.distraction_duration_seconds = distraction_duration_seconds
 
     def process(self, frame):
         height, width = frame.shape[:2]
@@ -61,9 +62,9 @@ class SafetyDetector:
         result = self.landmarker.detect(image)
 
         if not result.face_landmarks:
-            self.closed_frames = 0
-            self.yawn_frames = 0
-            self.distraction_frames = 0
+            self.closed_start_time = None
+            self.yawn_start_time = None
+            self.distraction_start_time = None
             return SafetyResult(
                 eye_status="No face",
                 yawn_status="No yawn",
@@ -88,16 +89,20 @@ class SafetyDetector:
         left_ear = calculate_ear([points[index] for index in LEFT_EYE])
         average_ear = (right_ear + left_ear) / 2
 
+        current_time = time.time()
+
         if average_ear <= self.closed_threshold:
-            self.closed_frames += 1
+            if self.closed_start_time is None:
+                self.closed_start_time = current_time
+            closed_duration = current_time - self.closed_start_time
             eye_status = (
                 "Drowsy"
-                if self.closed_frames >= self.frames_until_drowsy
+                if closed_duration >= self.drowsy_duration_seconds
                 else "Eyes closed"
             )
             status_color = (0, 0, 255)
         else:
-            self.closed_frames = 0
+            self.closed_start_time = None
             eye_status = "Eyes open"
             status_color = (0, 255, 0)
 
@@ -105,29 +110,33 @@ class SafetyDetector:
         pitch = pose[0] if pose is not None else None
         yaw = pose[1] if pose is not None else None
         if is_looking_away(pose, self.pose_threshold):
-            self.distraction_frames += 1
-            if self.distraction_frames >= self.frames_until_distraction:
+            if self.distraction_start_time is None:
+                self.distraction_start_time = current_time
+            distraction_duration = current_time - self.distraction_start_time
+            if distraction_duration >= self.distraction_duration_seconds:
                 distraction_status = "Distraction warning"
                 distraction_color = (0, 0, 255)
             else:
                 distraction_status = "Checking pose"
                 distraction_color = (0, 255, 255)
         else:
-            self.distraction_frames = 0
+            self.distraction_start_time = None
             distraction_status = "Pose normal"
             distraction_color = (0, 255, 0)
 
         current_mar = calculate_mar(points)
         if current_mar > self.mouth_threshold:
-            self.yawn_frames += 1
-            if self.yawn_frames >= self.frames_until_yawn:
+            if self.yawn_start_time is None:
+                self.yawn_start_time = current_time
+            yawn_duration = current_time - self.yawn_start_time
+            if yawn_duration >= self.yawn_duration_seconds:
                 yawn_status = "Yawn warning"
                 yawn_color = (0, 0, 255)
             else:
                 yawn_status = "No yawn"
                 yawn_color = (0, 255, 0)
         else:
-            self.yawn_frames = 0
+            self.yawn_start_time = None
             yawn_status = "No yawn"
             yawn_color = (0, 255, 0)
 
